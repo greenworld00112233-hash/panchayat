@@ -134,6 +134,111 @@ app.post('/api/upload', async (req, res) => {
   }
 });
 
+// --- Public Complaints Routes (No auth required) ---
+app.post('/api/public/complaints', async (req, res) => {
+  const { name, contact, village, description, photoUrl, voiceUrl } = req.body;
+  if (!description || !name || !contact) {
+    return res.status(400).json({ error: 'Name, contact, and description are required' });
+  }
+
+  try {
+    let user = await getQuery('SELECT * FROM users WHERE contact = ?', [contact]);
+    let userId;
+    if (!user) {
+      userId = 'usr_' + Math.random().toString(36).substr(2, 9);
+      await runQuery(`
+        INSERT INTO users (id, name, role, village, contact, password_hash)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [userId, name, 'citizen', village || '', contact, '']);
+    } else {
+      userId = user.id;
+      await runQuery('UPDATE users SET name = ?, village = ? WHERE id = ?', [name, village || user.village, userId]);
+    }
+
+    const complaintId = 'cmp_' + Math.random().toString(36).substr(2, 9);
+    let deptId = classifyComplaint(description);
+
+    await runQuery(`
+      INSERT INTO complaints (id, citizen_id, description, department_id, status, photo_url, voice_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [complaintId, userId, description, deptId, 'Submitted', photoUrl || null, voiceUrl || null]);
+
+    await logAudit(complaintId, userId, 'Submitted public complaint');
+
+    await sendNotification(
+      complaintId,
+      contact,
+      `Your grievance has been submitted successfully. Tracking ID: ${complaintId}`,
+      'sms'
+    );
+
+    res.json({ success: true, complaintId, assignedDepartment: deptId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/complaints/track', async (req, res) => {
+  const { query } = req.query;
+  if (!query) {
+    return res.status(400).json({ error: 'Complaint ID or contact number required' });
+  }
+
+  try {
+    let complaints;
+    if (query.startsWith('cmp_')) {
+      complaints = await allQuery(`
+        SELECT c.*, u.name as citizen_name, u.contact as citizen_contact, u.village as citizen_village, d.name as department_name
+        FROM complaints c
+        JOIN users u ON c.citizen_id = u.id
+        LEFT JOIN departments d ON c.department_id = d.id
+        WHERE c.id = ?
+      `, [query]);
+    } else {
+      complaints = await allQuery(`
+        SELECT c.*, u.name as citizen_name, u.contact as citizen_contact, u.village as citizen_village, d.name as department_name
+        FROM complaints c
+        JOIN users u ON c.citizen_id = u.id
+        LEFT JOIN departments d ON c.department_id = d.id
+        WHERE u.contact = ?
+        ORDER BY c.created_at DESC
+      `, [query]);
+    }
+
+    const complaintsWithComments = [];
+    for (const c of complaints) {
+      const comments = await allQuery(`
+        SELECT c.*, d.name as department_name
+        FROM comments c
+        JOIN departments d ON c.department_id = d.id
+        WHERE c.complaint_id = ? AND c.visibility = 'public'
+        ORDER BY c.created_at ASC
+      `, [c.id]);
+      complaintsWithComments.push({ ...c, comments });
+    }
+
+    res.json(complaintsWithComments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/public/complaints/:id/feedback', async (req, res) => {
+  const { id } = req.params;
+  const { rating, comment } = req.body;
+
+  try {
+    await runQuery(`
+      UPDATE complaints 
+      SET feedback_rating = ?, feedback_comment = ?
+      WHERE id = ?
+    `, [rating, comment || null, id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Complaints Routes ---
 app.post('/api/complaints', authenticateToken, async (req, res) => {
   const { description, photoUrl, voiceUrl } = req.body;

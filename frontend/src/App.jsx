@@ -122,7 +122,12 @@ export default function App() {
   const [newComment, setNewComment] = useState({ text: '', visibility: 'public' });
   const [feedback, setFeedback] = useState({ rating: 5, comment: '' });
   
-  // New Complaint Form
+  // Public & Staff Complaint States
+  const [publicForm, setPublicForm] = useState({ name: '', contact: '', village: '', description: '', photo: null });
+  const [trackQuery, setTrackQuery] = useState('');
+  const [trackedComplaints, setTrackedComplaints] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showStaffPortal, setShowStaffPortal] = useState(false);
   const [complaintForm, setComplaintForm] = useState({ description: '', photo: null });
   const [isListening, setIsListening] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -243,7 +248,7 @@ export default function App() {
     setSelectedComplaint(null);
   };
 
-  // Web Speech API Voice Recognition
+  // Web Speech API Voice Recognition (Modified for Public Form)
   const startSpeech = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -258,7 +263,7 @@ export default function App() {
     rec.onstart = () => setIsListening(true);
     rec.onresult = (e) => {
       const text = e.results[0][0].transcript;
-      setComplaintForm(prev => ({ ...prev, description: prev.description + ' ' + text }));
+      setPublicForm(prev => ({ ...prev, description: prev.description + ' ' + text }));
     };
     rec.onerror = () => setIsListening(false);
     rec.onend = () => setIsListening(false);
@@ -271,65 +276,116 @@ export default function App() {
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
-      setComplaintForm(prev => ({ ...prev, photo: reader.result }));
+      setPublicForm(prev => ({ ...prev, photo: reader.result }));
     };
     reader.readAsDataURL(file);
   };
 
-  const submitComplaint = async (e) => {
+  // Public submission handler (no auth token required)
+  const submitPublicComplaint = async (e) => {
     e.preventDefault();
-    if (!complaintForm.description.trim()) {
-      showNotification('Description is required', 'error');
+    if (!publicForm.name.trim() || !publicForm.contact.trim() || !publicForm.description.trim()) {
+      showNotification('Name, contact number, and description are required', 'error');
       return;
     }
 
     if (!isOnline) {
-      // Offline Kiosk queuing
       const offlineItem = {
         id: 'off_' + Math.random().toString(36).substr(2, 9),
-        description: complaintForm.description,
-        photo: complaintForm.photo,
+        name: publicForm.name,
+        contact: publicForm.contact,
+        village: publicForm.village,
+        description: publicForm.description,
+        photo: publicForm.photo,
         created_at: new Date().toISOString()
       };
       const updatedQueue = [...offlineQueue, offlineItem];
       setOfflineQueue(updatedQueue);
       localStorage.setItem('offline_grievances', JSON.stringify(updatedQueue));
       showNotification('Offline Kiosk: Grievance queued. Will sync when online!', 'warning');
-      setComplaintForm({ description: '', photo: null });
+      setPublicForm({ name: '', contact: '', village: '', description: '', photo: null });
       return;
     }
 
-    // Direct Online Submission
     try {
       let photoUrl = null;
-      if (complaintForm.photo) {
+      if (publicForm.photo) {
         const uploadRes = await fetch(`${API_BASE}/upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: 'grievance.jpg', fileData: complaintForm.photo })
+          body: JSON.stringify({ fileName: 'grievance.jpg', fileData: publicForm.photo })
         });
         const uploadData = await uploadRes.json();
         photoUrl = uploadData.url;
       }
 
-      const res = await fetch(`${API_BASE}/complaints`, {
+      const res = await fetch(`${API_BASE}/public/complaints`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ description: complaintForm.description, photoUrl })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: publicForm.name,
+          contact: publicForm.contact,
+          village: publicForm.village,
+          description: publicForm.description,
+          photoUrl
+        })
       });
       const data = await res.json();
       if (res.ok) {
-        showNotification(`Grievance submitted successfully! ID: ${data.complaintId}`);
-        setComplaintForm({ description: '', photo: null });
-        fetchComplaints();
+        showNotification(`Grievance submitted successfully! Tracking ID: ${data.complaintId}`);
+        setTrackQuery(data.complaintId);
+        setPublicForm({ name: '', contact: '', village: '', description: '', photo: null });
+        performTrackLookup(data.complaintId);
       } else {
         showNotification(data.error, 'error');
       }
     } catch (err) {
       showNotification('Failed to submit grievance', 'error');
+    }
+  };
+
+  const performTrackLookup = async (queryVal) => {
+    if (!queryVal.trim()) return;
+    setIsSearching(true);
+    try {
+      const res = await fetch(`${API_BASE}/public/complaints/track?query=${encodeURIComponent(queryVal)}`);
+      const data = await res.json();
+      if (res.ok) {
+        setTrackedComplaints(data);
+        if (data.length === 0) {
+          showNotification('No matching complaints found', 'warning');
+        }
+      } else {
+        showNotification(data.error, 'error');
+      }
+    } catch (err) {
+      showNotification('Failed to fetch tracking data', 'error');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleTrackSearch = (e) => {
+    e.preventDefault();
+    performTrackLookup(trackQuery);
+  };
+
+  const submitPublicFeedback = async (complaintId, rating, comment) => {
+    try {
+      const res = await fetch(`${API_BASE}/public/complaints/${complaintId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, comment })
+      });
+      if (res.ok) {
+        showNotification('Thank you for your feedback!');
+        performTrackLookup(trackQuery);
+      } else {
+        const data = await res.json();
+        showNotification(data.error, 'error');
+      }
+    } catch (err) {
+      showNotification('Failed to post feedback', 'error');
     }
   };
 
@@ -349,14 +405,19 @@ export default function App() {
           photoUrl = uploadData.url;
         }
 
-        await fetch(`${API_BASE}/complaints`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ description: item.description, photoUrl })
-        });
+        if (item.name && item.contact) {
+          await fetch(`${API_BASE}/public/complaints`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: item.name,
+              contact: item.contact,
+              village: item.village,
+              description: item.description,
+              photoUrl
+            })
+          });
+        }
       } catch (e) {
         console.error('Failed to sync item:', item.id, e);
       }
@@ -364,7 +425,7 @@ export default function App() {
     localStorage.removeItem('offline_grievances');
     setOfflineQueue([]);
     showNotification('All offline complaints synced successfully!');
-    fetchComplaints();
+    if (token) fetchComplaints();
   };
 
   const selectComplaintDetail = async (c) => {
@@ -484,6 +545,15 @@ export default function App() {
             <Languages size={18} />
             {lang === 'en' ? 'Hindi' : 'English'}
           </button>
+          {!token && (
+            <button className="btn btn-primary" onClick={() => {
+              setShowStaffPortal(!showStaffPortal);
+              setSelectedRole('admin');
+            }} style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShieldCheck size={18} />
+              {showStaffPortal ? 'Villager Portal' : 'Staff/Sarpanch Portal'}
+            </button>
+          )}
           {token && (
             <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '8px 12px' }}>
               <LogOut size={18} />
@@ -516,103 +586,301 @@ export default function App() {
           </div>
         )}
 
-        {/* Auth Module */}
+        {/* Auth / Public Portal Module */}
         {!token || !user ? (
-          <div style={{ maxWidth: '500px', margin: '80px auto' }} className="glass-panel">
-            <h2 style={{ marginBottom: '8px', textAlign: 'center' }}>{t.login}</h2>
-            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '24px' }}>{t.authSubtitle}</p>
-            
-            {/* Role selection tab */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-              {['citizen', 'admin', 'department'].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-color)',
-                    background: selectedRole === r ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
-                    color: 'white',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => setSelectedRole(r)}
-                >
-                  {r === 'citizen' ? t.roleCitizen : r === 'admin' ? t.roleAdmin : t.roleDept}
-                </button>
-              ))}
-            </div>
+          showStaffPortal ? (
+            <div style={{ maxWidth: '500px', margin: '80px auto' }} className="glass-panel">
+              <h2 style={{ marginBottom: '8px', textAlign: 'center' }}>Staff & Sarpanch Portal</h2>
+              <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '24px' }}>Sign in to manage and allocate village grievances</p>
+              
+              {/* Role selection tab (Staff only) */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                {['admin', 'department'].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      background: selectedRole === r ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
+                      color: 'white',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setSelectedRole(r)}
+                  >
+                    {r === 'admin' ? t.roleAdmin : t.roleDept}
+                  </button>
+                ))}
+              </div>
 
-            <form onSubmit={handleAuth}>
-              {authMode === 'register' && (
+              <form onSubmit={handleAuth}>
                 <div className="form-group">
-                  <label className="form-label">{t.name}</label>
+                  <label className="form-label">{t.mobile}</label>
                   <input
                     type="text"
                     className="input-control"
                     required
-                    value={authForm.name}
-                    onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
+                    placeholder="e.g. 9900990099"
+                    value={authForm.contact}
+                    onChange={(e) => setAuthForm({ ...authForm, contact: e.target.value })}
                   />
                 </div>
-              )}
 
-              <div className="form-group">
-                <label className="form-label">{t.mobile}</label>
-                <input
-                  type="text"
-                  className="input-control"
-                  required
-                  placeholder="e.g. 9876543210"
-                  value={authForm.contact}
-                  onChange={(e) => setAuthForm({ ...authForm, contact: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <input
-                  type="password"
-                  className="input-control"
-                  required
-                  value={authForm.password}
-                  onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
-                />
-              </div>
-
-              {authMode === 'register' && selectedRole === 'citizen' && (
                 <div className="form-group">
-                  <label className="form-label">{t.village}</label>
+                  <label className="form-label">Password</label>
                   <input
-                    type="text"
+                    type="password"
                     className="input-control"
-                    placeholder="e.g. Rajpur"
-                    value={authForm.village}
-                    onChange={(e) => setAuthForm({ ...authForm, village: e.target.value })}
+                    required
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
                   />
                 </div>
-              )}
 
-              <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} type="submit">
-                {authMode === 'login' ? 'Sign In' : 'Register'}
-              </button>
-
-              <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                <a
-                  href="#"
-                  style={{ color: 'var(--accent-primary)', fontSize: '0.9rem', textDecoration: 'none' }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setAuthMode(authMode === 'login' ? 'register' : 'login');
-                  }}
-                >
-                  {authMode === 'login' ? "Don't have an account? Register" : "Already have an account? Sign In"}
-                </a>
+                <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} type="submit">
+                  Sign In
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div>
+              <div style={{ textAlign: 'center', marginBottom: '45px', marginTop: '20px' }}>
+                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '10px' }}>{t.title}</h1>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>{t.subtitle}</p>
               </div>
-            </form>
-          </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+                {/* Submit Panel */}
+                <div className="glass-panel" style={{ padding: '30px' }}>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <Plus size={22} style={{ color: 'var(--accent-primary)' }} />
+                    {t.submitNew}
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem' }}>
+                    Record your voice or type the description. Your grievance will be automatically classified by AI.
+                  </p>
+
+                  <form onSubmit={submitPublicComplaint}>
+                    <div className="form-group">
+                      <label className="form-label">{t.name} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
+                      <input
+                        type="text"
+                        className="input-control"
+                        placeholder="Your Name / आपका नाम"
+                        required
+                        value={publicForm.name}
+                        onChange={(e) => setPublicForm({ ...publicForm, name: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">{t.mobile} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
+                      <input
+                        type="text"
+                        className="input-control"
+                        placeholder="e.g. 9876543210"
+                        required
+                        value={publicForm.contact}
+                        onChange={(e) => setPublicForm({ ...publicForm, contact: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">{t.village}</label>
+                      <input
+                        type="text"
+                        className="input-control"
+                        placeholder="e.g. Rajpur / रामपुर"
+                        value={publicForm.village}
+                        onChange={(e) => setPublicForm({ ...publicForm, village: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label">{t.desc} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
+                        <button
+                          type="button"
+                          onClick={startSpeech}
+                          className="btn"
+                          style={{
+                            background: isListening ? 'var(--accent-danger)' : 'rgba(255,255,255,0.05)',
+                            padding: '6px 12px',
+                            fontSize: '0.8rem',
+                            border: '1px solid var(--border-color)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                          {t.voiceInput}
+                        </button>
+                      </div>
+                      <textarea
+                        rows="5"
+                        className="input-control"
+                        placeholder="Type complaint here... / अपनी शिकायत यहाँ लिखें..."
+                        value={publicForm.description}
+                        onChange={(e) => setPublicForm({ ...publicForm, description: e.target.value })}
+                        required
+                      ></textarea>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">{t.photo}</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                        className="input-control"
+                        style={{ padding: '8px' }}
+                      />
+                      {publicForm.photo && (
+                        <div style={{ marginTop: '12px' }}>
+                          <img src={publicForm.photo} alt="Preview" style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '8px' }} />
+                        </div>
+                      )}
+                    </div>
+
+                    <button className="btn btn-primary" style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }} type="submit">
+                      <Plus size={18} />
+                      {t.submit}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Track Panel */}
+                <div className="glass-panel" style={{ padding: '30px' }}>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <Clock size={22} style={{ color: 'var(--accent-primary)' }} />
+                    {t.trackStatus}
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem' }}>
+                    Enter your Complaint Tracking ID or Mobile Number to see updates.
+                  </p>
+
+                  <form onSubmit={handleTrackSearch} style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
+                    <input
+                      type="text"
+                      className="input-control"
+                      placeholder="Enter ID (cmp_...) or Mobile Number"
+                      required
+                      value={trackQuery}
+                      onChange={(e) => setTrackQuery(e.target.value)}
+                    />
+                    <button className="btn btn-primary" type="submit" disabled={isSearching} style={{ whiteSpace: 'nowrap' }}>
+                      {isSearching ? 'Searching...' : 'Search'}
+                    </button>
+                  </form>
+
+                  {trackedComplaints.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-secondary)' }}>
+                      <AlertCircle size={32} style={{ marginBottom: '8px' }} />
+                      <p>No complaints searched yet. Use the search box above to track your issues.</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '550px', overflowY: 'auto', paddingRight: '8px' }}>
+                      {trackedComplaints.map((c) => (
+                        <div key={c.id} className="glass-panel" style={{ padding: '16px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.01)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <div>
+                              <span style={{ fontWeight: 700, color: 'white' }}>{c.id}</span>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                                ({new Date(c.created_at).toLocaleDateString()})
+                              </span>
+                            </div>
+                            <span style={{
+                              background: c.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : c.status === 'In Process' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255,255,255,0.05)',
+                              color: c.status === 'Resolved' ? 'var(--accent-primary)' : c.status === 'In Process' ? 'var(--accent-secondary)' : 'var(--text-secondary)',
+                              padding: '4px 10px',
+                              borderRadius: '12px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600
+                            }}>
+                              {c.status}
+                            </span>
+                          </div>
+
+                          <p style={{ fontSize: '0.95rem', color: 'white', marginBottom: '10px' }}>{c.description}</p>
+                          
+                          {c.photo_url && (
+                            <div style={{ marginBottom: '10px' }}>
+                              <img src={c.photo_url} alt="Grievance Attachment" style={{ maxWidth: '120px', borderRadius: '4px' }} />
+                            </div>
+                          )}
+
+                          <div style={{ fontSize: '0.85rem', color: 'var(--accent-primary)', marginBottom: '12px' }}>
+                            Assigned Department: <strong>{c.department_name || 'Awaiting Allocation'}</strong>
+                          </div>
+
+                          {/* Status tracker steps */}
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px' }}>
+                            {['Submitted', 'In Process', 'Resolved'].map((s, idx) => {
+                              const statuses = ['Submitted', 'In Process', 'Resolved'];
+                              const currentIdx = statuses.indexOf(c.status);
+                              const isCompleted = idx <= currentIdx;
+                              return (
+                                <div key={s} style={{ flex: 1, textAlign: 'center', opacity: isCompleted ? 1 : 0.4 }}>
+                                  <div style={{ height: '4px', background: isCompleted ? 'var(--accent-primary)' : 'var(--border-color)', marginBottom: '6px' }}></div>
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{s}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Comments */}
+                          {c.comments && c.comments.length > 0 && (
+                            <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                              <h5 style={{ marginBottom: '8px', color: 'var(--text-secondary)' }}>Department Updates:</h5>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {c.comments.map((comm) => (
+                                  <div key={comm.id} style={{ background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '6px', fontSize: '0.85rem' }}>
+                                    <div style={{ color: 'var(--accent-primary)', fontWeight: 600, fontSize: '0.8rem', marginBottom: '4px' }}>
+                                      {comm.department_name}
+                                    </div>
+                                    <p style={{ color: 'white' }}>{comm.text}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Public Feedback Form */}
+                          {c.status === 'Resolved' && !c.feedback_rating && (
+                            <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', background: 'rgba(16,185,129,0.02)', padding: '12px', borderRadius: '8px' }}>
+                              <h5 style={{ marginBottom: '8px', color: 'var(--accent-primary)' }}>Resolution Feedback</h5>
+                              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() => submitPublicFeedback(c.id, star, '')}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: star <= 5 ? '#f59e0b' : '#374151' }}
+                                  >
+                                    <Star size={20} fill={star <= 5 ? '#f59e0b' : 'none'} />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {c.feedback_rating && (
+                            <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                              ⭐ Rated: <strong>{c.feedback_rating} / 5</strong>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
         ) : (
           <div>
             {/* Dashboard Headers */}
@@ -633,118 +901,6 @@ export default function App() {
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{t.subtitle}</p>
               </div>
             </div>
-
-            {/* CITIZEN DASHBOARD LAYOUT */}
-            {user.role === 'citizen' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
-                {/* Submit Panel */}
-                <div className="glass-panel">
-                  <h3>{t.submitNew}</h3>
-                  <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '0.9rem' }}>
-                    Record voice or type description. AI will automatically assign it.
-                  </p>
-
-                  <form onSubmit={submitComplaint}>
-                    <div className="form-group">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <label className="form-label">{t.desc}</label>
-                        <button
-                          type="button"
-                          onClick={startSpeech}
-                          className="btn"
-                          style={{
-                            background: isListening ? 'var(--accent-danger)' : 'rgba(255,255,255,0.05)',
-                            padding: '6px 12px',
-                            fontSize: '0.8rem',
-                            border: '1px solid var(--border-color)'
-                          }}
-                        >
-                          {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-                          {t.voiceInput}
-                        </button>
-                      </div>
-                      <textarea
-                        rows="5"
-                        className="input-control"
-                        placeholder="Type complaint here..."
-                        value={complaintForm.description}
-                        onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
-                        required
-                      ></textarea>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">{t.photo}</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoUpload}
-                        className="input-control"
-                        style={{ padding: '8px' }}
-                      />
-                      {complaintForm.photo && (
-                        <div style={{ marginTop: '10px' }}>
-                          <img src={complaintForm.photo} alt="Preview" style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '8px' }} />
-                        </div>
-                      )}
-                    </div>
-
-                    <button className="btn btn-primary" style={{ width: '100%' }} type="submit">
-                      <Plus size={18} />
-                      {t.submit}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Track Status / Complaints list */}
-                <div className="glass-panel">
-                  <h3>Track Grievances</h3>
-                  <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '0.9rem' }}>
-                    Select a complaint below to see interactive status timeline & QR code.
-                  </p>
-
-                  {complaints.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
-                      <AlertCircle size={32} style={{ marginBottom: '8px' }} />
-                      <p>{t.noComplaints}</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '450px', overflowY: 'auto' }}>
-                      {complaints.map((c) => (
-                        <div
-                          key={c.id}
-                          className="glass-panel"
-                          style={{
-                            padding: '16px',
-                            cursor: 'pointer',
-                            borderLeft: selectedComplaint?.id === c.id ? '4px solid var(--accent-primary)' : '1px solid var(--border-color)',
-                            background: selectedComplaint?.id === c.id ? 'rgba(16,185,129,0.05)' : 'var(--bg-card)'
-                          }}
-                          onClick={() => selectComplaintDetail(c)}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <span style={{ fontWeight: 700, color: 'white' }}>{c.id}</span>
-                            <span style={{
-                              background: c.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : c.status === 'In Process' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255,255,255,0.05)',
-                              color: c.status === 'Resolved' ? 'var(--accent-primary)' : c.status === 'In Process' ? 'var(--accent-secondary)' : 'var(--text-secondary)',
-                              padding: '4px 10px',
-                              borderRadius: '12px',
-                              fontSize: '0.75rem',
-                              fontWeight: 600
-                            }}>
-                              {c.status}
-                            </span>
-                          </div>
-                          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                            {c.description}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* ADMIN DASHBOARD LAYOUT */}
             {user.role === 'admin' && (
