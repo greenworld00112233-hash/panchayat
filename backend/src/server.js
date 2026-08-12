@@ -25,6 +25,29 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Database Initialization Middleware for Serverless
+let dbInitialized = false;
+let dbInitializingPromise = null;
+
+async function ensureDbInitialized(req, res, next) {
+  if (dbInitialized) {
+    return next();
+  }
+  if (!dbInitializingPromise) {
+    dbInitializingPromise = initDb().then(() => {
+      dbInitialized = true;
+    });
+  }
+  try {
+    await dbInitializingPromise;
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Database initialization failed: ' + err.message });
+  }
+}
+
+app.use(ensureDbInitialized);
+
 // Authentication Middleware
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -341,8 +364,6 @@ if (!process.env.VERCEL) {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   });
-} else {
-  initDb().catch(err => console.error('Database initialization error:', err.message));
 }
 
 module.exports = app;
