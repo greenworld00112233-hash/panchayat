@@ -332,8 +332,14 @@ app.get('/api/analytics', authenticateToken, async (req, res) => {
 });
 
 // Start Database & Express Server
-initDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+if (!process.env.VERCEL) {
+  initDb().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
   });
-});
+} else {
+  initDb().catch(err => console.error('Database initialization error:', err.message));
+}
+
+module.exports = app;

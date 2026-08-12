@@ -2,12 +2,14 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const dbPath = path.resolve(__dirname, '../data/panchayat.db');
+const dbPath = process.env.VERCEL
+  ? '/tmp/panchayat.db'
+  : path.resolve(__dirname, '../data/panchayat.db');
 
 // Ensure data folder exists
 const fs = require('fs');
 const dataDir = path.dirname(dbPath);
-if (!fs.existsSync(dataDir)) {
+if (!process.env.VERCEL && !fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
