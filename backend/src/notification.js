@@ -2,11 +2,17 @@ const fs = require('fs');
 const path = require('path');
 const { runQuery } = require('./config');
 
-const logPath = path.resolve(__dirname, '../data/notifications_log.json');
+const logPath = process.env.VERCEL
+  ? '/tmp/notifications_log.json'
+  : path.resolve(__dirname, '../data/notifications_log.json');
 
 // Ensure log file exists
 if (!fs.existsSync(logPath)) {
-  fs.writeFileSync(logPath, JSON.stringify([], null, 2));
+  try {
+    fs.writeFileSync(logPath, JSON.stringify([], null, 2));
+  } catch (err) {
+    console.error('Error creating notifications log:', err.message);
+  }
 }
 
 async function sendNotification(complaintId, contact, message, type = 'sms') {
