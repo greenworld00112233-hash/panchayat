@@ -70,6 +70,11 @@ async function logAudit(complaintId, userId, action) {
   `, [id, complaintId, userId, action]);
 }
 
+// --- Status Route ---
+app.get('/api', (req, res) => {
+  res.json({ status: 'success', message: 'Gram Panchayat Backend API is running' });
+});
+
 // --- Auth Routes ---
 app.post('/api/auth/register', async (req, res) => {
   const { name, contact, password, village, role } = req.body;

@@ -129,7 +129,7 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [showStaffPortal, setShowStaffPortal] = useState(false);
   const [complaintForm, setComplaintForm] = useState({ description: '', photo: null });
-  const [isListening, setIsListening] = useState(false);
+  const [listeningField, setListeningField] = useState(null);
   const [notification, setNotification] = useState(null);
   
   // Admin & Analytics State
@@ -249,7 +249,7 @@ export default function App() {
   };
 
   // Web Speech API Voice Recognition (Modified for Public Form)
-  const startSpeech = () => {
+  const startSpeech = (field = 'description') => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       showNotification('Speech recognition not supported in this browser', 'error');
@@ -260,13 +260,23 @@ export default function App() {
     rec.continuous = false;
     rec.interimResults = false;
     
-    rec.onstart = () => setIsListening(true);
+    rec.onstart = () => setListeningField(field);
     rec.onresult = (e) => {
-      const text = e.results[0][0].transcript;
-      setPublicForm(prev => ({ ...prev, description: prev.description + ' ' + text }));
+      let text = e.results[0][0].transcript;
+      if (field === 'contact') {
+        // Strip out non-digits for phone numbers
+        text = text.replace(/\D/g, '');
+      }
+      setPublicForm(prev => {
+        const currentVal = prev[field] || '';
+        const newVal = currentVal 
+          ? (field === 'contact' ? currentVal + text : currentVal + ' ' + text)
+          : text;
+        return { ...prev, [field]: newVal };
+      });
     };
-    rec.onerror = () => setIsListening(false);
-    rec.onend = () => setIsListening(false);
+    rec.onerror = () => setListeningField(null);
+    rec.onend = () => setListeningField(null);
     
     rec.start();
   };
@@ -665,7 +675,26 @@ export default function App() {
 
                   <form onSubmit={submitPublicComplaint}>
                     <div className="form-group">
-                      <label className="form-label">{t.name} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label">{t.name} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
+                        <button
+                          type="button"
+                          onClick={() => startSpeech('name')}
+                          className="btn"
+                          style={{
+                            background: listeningField === 'name' ? 'var(--accent-danger)' : 'rgba(255,255,255,0.05)',
+                            padding: '6px 12px',
+                            fontSize: '0.8rem',
+                            border: '1px solid var(--border-color)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          {listeningField === 'name' ? <MicOff size={14} /> : <Mic size={14} />}
+                          {t.voiceInput}
+                        </button>
+                      </div>
                       <input
                         type="text"
                         className="input-control"
@@ -677,7 +706,26 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">{t.mobile} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label">{t.mobile} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
+                        <button
+                          type="button"
+                          onClick={() => startSpeech('contact')}
+                          className="btn"
+                          style={{
+                            background: listeningField === 'contact' ? 'var(--accent-danger)' : 'rgba(255,255,255,0.05)',
+                            padding: '6px 12px',
+                            fontSize: '0.8rem',
+                            border: '1px solid var(--border-color)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          {listeningField === 'contact' ? <MicOff size={14} /> : <Mic size={14} />}
+                          {t.voiceInput}
+                        </button>
+                      </div>
                       <input
                         type="text"
                         className="input-control"
@@ -689,7 +737,26 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">{t.village}</label>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label">{t.village}</label>
+                        <button
+                          type="button"
+                          onClick={() => startSpeech('village')}
+                          className="btn"
+                          style={{
+                            background: listeningField === 'village' ? 'var(--accent-danger)' : 'rgba(255,255,255,0.05)',
+                            padding: '6px 12px',
+                            fontSize: '0.8rem',
+                            border: '1px solid var(--border-color)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          {listeningField === 'village' ? <MicOff size={14} /> : <Mic size={14} />}
+                          {t.voiceInput}
+                        </button>
+                      </div>
                       <input
                         type="text"
                         className="input-control"
@@ -704,10 +771,10 @@ export default function App() {
                         <label className="form-label">{t.desc} <span style={{ color: 'var(--accent-danger)' }}>*</span></label>
                         <button
                           type="button"
-                          onClick={startSpeech}
+                          onClick={() => startSpeech('description')}
                           className="btn"
                           style={{
-                            background: isListening ? 'var(--accent-danger)' : 'rgba(255,255,255,0.05)',
+                            background: listeningField === 'description' ? 'var(--accent-danger)' : 'rgba(255,255,255,0.05)',
                             padding: '6px 12px',
                             fontSize: '0.8rem',
                             border: '1px solid var(--border-color)',
@@ -716,7 +783,7 @@ export default function App() {
                             gap: '6px'
                           }}
                         >
-                          {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                          {listeningField === 'description' ? <MicOff size={14} /> : <Mic size={14} />}
                           {t.voiceInput}
                         </button>
                       </div>
