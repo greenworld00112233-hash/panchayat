@@ -660,18 +660,24 @@ export default function App() {
         },
         body: JSON.stringify({ status, departmentId })
       });
+      const data = await res.json();
       if (res.ok) {
         showNotification('Complaint updated successfully');
         fetchComplaints();
         fetchAnalytics();
-        // Refresh details
-        const updated = complaints.find(item => item.id === id);
-        if (updated) {
-          selectComplaintDetail({ ...updated, status, department_id: departmentId });
-        }
+        // Refresh details directly
+        setSelectedComplaint(prev => {
+          if (prev && prev.id === id) {
+            return { ...prev, status, department_id: departmentId };
+          }
+          return prev;
+        });
+      } else {
+        showNotification(data.error || 'Failed to update complaint status', 'error');
       }
     } catch (err) {
-      showNotification('Failed to update complaint', 'error');
+      console.error('Update status error:', err);
+      showNotification('Failed to update complaint: Network/Connection error', 'error');
     }
   };
 
