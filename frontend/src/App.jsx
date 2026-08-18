@@ -378,35 +378,195 @@ export default function App() {
   };
 
   const downloadReceipt = (c) => {
-    const receiptText = `==================================================
-        GRAM PANCHAYAT GRIEVANCE RECEIPT          
-==================================================
-Complaint Tracking ID : ${c.id}
-Date Registered       : ${new Date(c.created_at).toLocaleString()}
-Current Status        : ${c.status}
---------------------------------------------------
-Citizen Details:
---------------------------------------------------
-Name                  : ${c.citizen_name || c.name || 'Anonymous'}
-Contact / Mobile      : ${c.citizen_contact || c.contact || 'N/A'}
-Village Name          : ${c.citizen_village || c.village || 'N/A'}
---------------------------------------------------
-Grievance Description:
---------------------------------------------------
-${c.description}
-
---------------------------------------------------
-Assigned Department   : ${c.department_name || 'Awaiting Allocation'}
---------------------------------------------------
-You can track this complaint online at:
-${window.location.origin}/track/${c.id}
-==================================================
-Thank you for your civic contribution.
-    `;
+    const receiptHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grievance Receipt - ${c.id}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .receipt-card {
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .header {
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #10b981;
+            font-size: 1.6rem;
+            margin: 0 0 6px 0;
+            font-weight: 800;
+        }
+        .header p {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            margin: 0;
+        }
+        .divider {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            margin: 18px 0;
+        }
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            margin-bottom: 18px;
+        }
+        .details-table th, .details-table td {
+            padding: 6px 0;
+            font-size: 0.9rem;
+        }
+        .details-table th {
+            color: #94a3b8;
+            font-weight: 500;
+            width: 40%;
+        }
+        .details-table td {
+            color: #f8fafc;
+            font-weight: 600;
+        }
+        .qr-section {
+            background: white;
+            padding: 14px;
+            border-radius: 12px;
+            display: inline-block;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .qr-section img {
+            display: block;
+            margin: 0 auto;
+        }
+        .qr-section p {
+            color: #0f172a;
+            font-size: 0.75rem;
+            font-weight: 800;
+            margin: 0 0 6px 0;
+        }
+        .actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+        .btn-print {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        .btn-print:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            .receipt-card {
+                background: white !important;
+                color: black !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+            }
+            .actions {
+                display: none !important;
+            }
+            .details-table td {
+                color: black !important;
+            }
+            .details-table th {
+                color: #555 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-card">
+        <div class="header">
+            <h1>Official Receipt</h1>
+            <p>Gram Panchayat Grievance Redressal System</p>
+        </div>
+        <div class="divider"></div>
+        <table class="details-table">
+            <tr>
+                <th>Complaint ID:</th>
+                <td>${c.id}</td>
+            </tr>
+            <tr>
+                <th>Date:</th>
+                <td>${new Date(c.created_at).toLocaleString()}</td>
+            </tr>
+            <tr>
+                <th>Status:</th>
+                <td>${c.status}</td>
+            </tr>
+            <tr>
+                <th>Citizen Name:</th>
+                <td>${c.citizen_name || c.name || 'Anonymous'}</td>
+            </tr>
+            <tr>
+                <th>Mobile Number:</th>
+                <td>${c.citizen_contact || c.contact || 'N/A'}</td>
+            </tr>
+            <tr>
+                <th>Village:</th>
+                <td>${c.citizen_village || c.village || 'N/A'}</td>
+            </tr>
+            <tr>
+                <th>Department:</th>
+                <td>${c.department_name || 'Awaiting Allocation'}</td>
+            </tr>
+        </table>
+        <div class="divider"></div>
+        <div style="margin-bottom: 20px; text-align: left;">
+            <strong style="color: #94a3b8; font-size: 0.9rem;">Description:</strong>
+            <p style="margin: 6px 0 0 0; font-size: 0.9rem; line-height: 1.4; color: #e2e8f0;">${c.description}</p>
+        </div>
+        <div class="divider"></div>
+        <div class="qr-section">
+            <p>Scan to Track Status</p>
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(window.location.origin + '/track/' + c.id)}" alt="Tracking QR Code">
+        </div>
+        <div class="actions">
+            <button class="btn btn-print" onclick="window.print()">Print / Save PDF</button>
+        </div>
+    </div>
+</body>
+</html>`;
     const element = document.createElement("a");
-    const file = new Blob([receiptText], { type: 'text/plain;charset=utf-8' });
+    const file = new Blob([receiptHtml], { type: 'text/html;charset=utf-8' });
     element.href = URL.createObjectURL(file);
-    element.download = `Receipt_${c.id}.txt`;
+    element.download = `Receipt_${c.id}.html`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
