@@ -111,7 +111,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [authMode, setAuthMode] = useState('login'); // login / register
-  const [selectedRole, setSelectedRole] = useState('citizen');
+  const [selectedRole, setSelectedRole] = useState('admin');
   const [authForm, setAuthForm] = useState({ name: '', contact: '', password: '', village: '' });
   
   // System State

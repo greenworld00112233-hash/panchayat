@@ -137,13 +137,6 @@ async function initDb() {
   // Seed Demo Users
   const salt = await bcrypt.genSalt(10);
   
-  // Demo Citizen
-  const citizenHash = await bcrypt.hash('citizen123', salt);
-  await runQuery(`
-    INSERT OR IGNORE INTO users (id, name, role, village, contact, password_hash)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, ['c1', 'Ramesh Kumar', 'citizen', 'Rajpur', '9876543210', citizenHash]);
-
   // Demo Admin
   const adminHash = await bcrypt.hash('admin123', salt);
   await runQuery(`
