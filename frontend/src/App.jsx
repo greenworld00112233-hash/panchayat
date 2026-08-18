@@ -884,6 +884,19 @@ export default function App() {
                             Assigned Department: <strong>{c.department_name || 'Awaiting Allocation'}</strong>
                           </div>
 
+                          {/* QR Code tracking container */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'white', padding: '12px', borderRadius: '10px', marginBottom: '16px' }}>
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(window.location.origin + '/track/' + c.id)}`}
+                              alt="Tracking QR Code"
+                              style={{ width: '90px', height: '90px', border: '1px solid #eee', borderRadius: '6px' }}
+                            />
+                            <div>
+                              <p style={{ color: 'var(--bg-dark)', fontSize: '0.85rem', fontWeight: 800, marginBottom: '4px' }}>Scan to Track on Mobile / मोबाइल पर ट्रैक करें</p>
+                              <p style={{ color: '#666', fontSize: '0.75rem' }}>Scan this QR code with your phone to view and track your complaint's progress.</p>
+                            </div>
+                          </div>
+
                           {/* Status tracker steps */}
                           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px' }}>
                             {['Submitted', 'In Process', 'Resolved'].map((s, idx) => {
@@ -1320,7 +1333,7 @@ export default function App() {
                     <div style={{ textAlign: 'center', marginBottom: '24px', background: 'white', padding: '16px', borderRadius: '12px' }}>
                       <p style={{ color: 'var(--bg-dark)', fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px' }}>Scan to Track on Mobile</p>
                       <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=http://localhost:5173/track/${selectedComplaint.id}`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(window.location.origin + '/track/' + selectedComplaint.id)}`}
                         alt="Tracking QR Code"
                         style={{ border: '1px solid #ccc', borderRadius: '6px' }}
                       />
