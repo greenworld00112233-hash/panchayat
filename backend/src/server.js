@@ -215,7 +215,7 @@ app.get('/api/public/complaints/track', async (req, res) => {
       const comments = await allQuery(`
         SELECT c.*, d.name as department_name
         FROM comments c
-        JOIN departments d ON c.department_id = d.id
+        LEFT JOIN departments d ON c.department_id = d.id
         WHERE c.complaint_id = ? AND c.visibility = 'public'
         ORDER BY c.created_at ASC
       `, [c.id]);
