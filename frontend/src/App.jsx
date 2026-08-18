@@ -387,9 +387,9 @@ Current Status        : ${c.status}
 --------------------------------------------------
 Citizen Details:
 --------------------------------------------------
-Name                  : ${c.name || 'Anonymous'}
-Contact / Mobile      : ${c.contact || 'N/A'}
-Village Name          : ${c.village || 'N/A'}
+Name                  : ${c.citizen_name || c.name || 'Anonymous'}
+Contact / Mobile      : ${c.citizen_contact || c.contact || 'N/A'}
+Village Name          : ${c.citizen_village || c.village || 'N/A'}
 --------------------------------------------------
 Grievance Description:
 --------------------------------------------------
