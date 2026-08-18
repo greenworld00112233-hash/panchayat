@@ -1,51 +1,64 @@
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const dbPath = process.env.VERCEL
-  ? '/tmp/panchayat.db'
-  : path.resolve(__dirname, '../data/panchayat.db');
-
-// Ensure data folder exists
-const fs = require('fs');
-const dataDir = path.dirname(dbPath);
-if (!process.env.VERCEL && !fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Load environment variables locally
+if (!process.env.VERCEL) {
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 }
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Database connection error:', err.message);
-  } else {
-    console.log('Connected to SQLite database.');
-  }
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('sslmode=require')
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-const runQuery = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+pool.on('connect', () => {
+  console.log('Connected to PostgreSQL database.');
+});
+
+pool.on('error', (err) => {
+  console.error('PostgreSQL connection pool error:', err.message);
+});
+
+const db = pool;
+
+function preprocessSql(sql) {
+  let processed = sql;
+  
+  // Convert SQLite "INSERT OR IGNORE" to PostgreSQL "ON CONFLICT" syntax
+  if (processed.includes('INSERT OR IGNORE INTO departments')) {
+    processed = processed.replace('INSERT OR IGNORE INTO departments', 'INSERT INTO departments');
+    processed += ' ON CONFLICT (id) DO NOTHING';
+  } else if (processed.includes('INSERT OR IGNORE INTO users')) {
+    processed = processed.replace('INSERT OR IGNORE INTO users', 'INSERT INTO users');
+    processed += ' ON CONFLICT (id) DO NOTHING';
+  }
+
+  // Convert SQLite ? to PostgreSQL $1, $2, ...
+  let count = 1;
+  processed = processed.replace(/\?/g, () => `$${count++}`);
+  return processed;
+}
+
+const runQuery = async (sql, params = []) => {
+  const query = preprocessSql(sql);
+  const result = await pool.query(query, params);
+  return result;
 };
 
-const getQuery = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+const getQuery = async (sql, params = []) => {
+  const query = preprocessSql(sql);
+  const result = await pool.query(query, params);
+  return result.rows[0];
 };
 
-const allQuery = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+const allQuery = async (sql, params = []) => {
+  const query = preprocessSql(sql);
+  const result = await pool.query(query, params);
+  return result.rows;
 };
 
 async function initDb() {
