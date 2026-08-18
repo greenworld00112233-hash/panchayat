@@ -50,7 +50,8 @@ const translations = {
     roleDept: "Department Operator",
     authSubtitle: "Select your role to login or register",
     noComplaints: "No complaints found.",
-    aiSuggested: "AI Suggested Department"
+    aiSuggested: "AI Suggested Department",
+    downloadReceipt: "Download Receipt"
   },
   hi: {
     title: "ग्राम पंचायत शिकायत निवारण प्रणाली",
@@ -95,7 +96,8 @@ const translations = {
     roleDept: "विभाग ऑपरेटर",
     authSubtitle: "लॉगिन या पंजीकरण करने के लिए अपनी भूमिका चुनें",
     noComplaints: "कोई शिकायत नहीं मिली।",
-    aiSuggested: "एआई द्वारा सुझाया गया विभाग"
+    aiSuggested: "एआई द्वारा सुझाया गया विभाग",
+    downloadReceipt: "रसीद डाउनलोड करें"
   }
 };
 
@@ -373,6 +375,42 @@ export default function App() {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const downloadReceipt = (c) => {
+    const receiptText = `==================================================
+        GRAM PANCHAYAT GRIEVANCE RECEIPT          
+==================================================
+Complaint Tracking ID : ${c.id}
+Date Registered       : ${new Date(c.created_at).toLocaleString()}
+Current Status        : ${c.status}
+--------------------------------------------------
+Citizen Details:
+--------------------------------------------------
+Name                  : ${c.name || 'Anonymous'}
+Contact / Mobile      : ${c.contact || 'N/A'}
+Village Name          : ${c.village || 'N/A'}
+--------------------------------------------------
+Grievance Description:
+--------------------------------------------------
+${c.description}
+
+--------------------------------------------------
+Assigned Department   : ${c.department_name || 'Awaiting Allocation'}
+--------------------------------------------------
+You can track this complaint online at:
+${window.location.origin}/track/${c.id}
+==================================================
+Thank you for your civic contribution.
+    `;
+    const element = document.createElement("a");
+    const file = new Blob([receiptText], { type: 'text/plain;charset=utf-8' });
+    element.href = URL.createObjectURL(file);
+    element.download = `Receipt_${c.id}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    showNotification('Receipt downloaded successfully!');
   };
 
   const handleTrackSearch = (e) => {
@@ -910,6 +948,18 @@ export default function App() {
                                 </div>
                               );
                             })}
+                          </div>
+
+                          {/* Actions Panel (Download Receipt) */}
+                          <div style={{ marginBottom: '16px' }}>
+                            <button
+                              onClick={() => downloadReceipt(c)}
+                              className="btn btn-secondary"
+                              style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '10px 16px', fontSize: '0.85rem' }}
+                            >
+                              <Download size={16} />
+                              {t.downloadReceipt}
+                            </button>
                           </div>
 
                           {/* Comments */}
