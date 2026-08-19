@@ -46,6 +46,29 @@ async function ensureDbInitialized(req, res, next) {
   }
 }
 
+app.get('/api/debug', async (req, res) => {
+  try {
+    const debugInfo = {
+      isVERCEL: !!process.env.VERCEL,
+      isDATABASE_URL_set: !!process.env.DATABASE_URL,
+      databaseUrlPrefix: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 15) : null,
+    };
+    
+    try {
+      await initDb();
+      debugInfo.dbInit = 'Success';
+    } catch (dbErr) {
+      debugInfo.dbInit = 'Failed';
+      debugInfo.dbError = dbErr.message;
+      debugInfo.dbStack = dbErr.stack;
+    }
+    
+    res.json(debugInfo);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(ensureDbInitialized);
 
 // Authentication Middleware
