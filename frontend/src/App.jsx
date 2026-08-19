@@ -37,6 +37,7 @@ export default function App() {
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedComplaints, setTrackedComplaints] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStaffPortal, setShowStaffPortal] = useState(false);
   const [listeningField, setListeningField] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -223,6 +224,7 @@ export default function App() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       let photoUrl = null;
       if (publicForm.photo) {
@@ -264,6 +266,8 @@ export default function App() {
       }
     } catch (err) {
       showNotification(err.message || 'Failed to submit grievance', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -731,6 +735,7 @@ export default function App() {
               setTrackQuery={setTrackQuery}
               handleTrackSearch={handleTrackSearch}
               isSearching={isSearching}
+              isSubmitting={isSubmitting}
               trackedComplaints={trackedComplaints}
               downloadReceipt={downloadReceipt}
               submitPublicFeedback={submitPublicFeedback}

@@ -12,6 +12,7 @@ export default function PublicPortal({
   setTrackQuery,
   handleTrackSearch,
   isSearching,
+  isSubmitting,
   trackedComplaints,
   downloadReceipt,
   submitPublicFeedback,
@@ -175,9 +176,14 @@ export default function PublicPortal({
               )}
             </div>
 
-            <button className="btn btn-primary" style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }} type="submit">
+            <button 
+              className="btn btn-primary" 
+              style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }} 
+              type="submit"
+              disabled={isSubmitting}
+            >
               <Plus size={18} />
-              {t.submit}
+              {isSubmitting ? 'Submitting...' : t.submit}
             </button>
           </form>
         </div>
