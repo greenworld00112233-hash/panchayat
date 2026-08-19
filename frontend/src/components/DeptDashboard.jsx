@@ -9,7 +9,7 @@ export default function DeptDashboard({
   t
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' }}>
+    <div className="grid-dashboard">
       <div className="glass-panel">
         <h3>Assigned Grievances</h3>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '0.9rem' }}>

@@ -10,7 +10,7 @@ export default function AdminDashboard({
   t
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' }}>
+    <div className="grid-dashboard">
       <div className="glass-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h3>All Registered Grievances</h3>
@@ -74,7 +74,7 @@ export default function AdminDashboard({
         <div className="glass-panel">
           <h3>Panchayat Overview</h3>
           {analytics?.summary ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '20px' }}>
+            <div className="grid-stats">
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
                 <span style={{ fontSize: '1.8rem', fontWeight: 800 }}>{analytics.summary.total}</span>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Received</p>

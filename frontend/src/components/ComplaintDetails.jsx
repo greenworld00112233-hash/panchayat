@@ -34,7 +34,7 @@ export default function ComplaintDetails({
         <button className="btn btn-secondary" onClick={() => setSelectedComplaint(null)}>Close</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px' }}>
+      <div className="grid-details">
         <div>
           <h4>Description</h4>
           <p style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', marginTop: '8px', lineHeight: '1.6' }}>

@@ -25,7 +25,7 @@ export default function PublicPortal({
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>{t.subtitle}</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+      <div className="grid-portal">
         {/* Submit Panel */}
         <div className="glass-panel" style={{ padding: '30px' }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
