@@ -103,10 +103,13 @@ const runQuery = async (sql, params = []) => {
       const query = preprocessSql(sql);
       return await pgPool.query(query, params);
     } catch (err) {
-      console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
-      usePostgres = false;
-      initSqlite();
-      return runQuery(sql, params);
+      if (!process.env.VERCEL) {
+        console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
+        usePostgres = false;
+        initSqlite();
+        return runQuery(sql, params);
+      }
+      throw err;
     }
   } else {
     initSqlite();
@@ -127,10 +130,13 @@ const getQuery = async (sql, params = []) => {
       const result = await pgPool.query(query, params);
       return result.rows[0];
     } catch (err) {
-      console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
-      usePostgres = false;
-      initSqlite();
-      return getQuery(sql, params);
+      if (!process.env.VERCEL) {
+        console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
+        usePostgres = false;
+        initSqlite();
+        return getQuery(sql, params);
+      }
+      throw err;
     }
   } else {
     initSqlite();
@@ -151,10 +157,13 @@ const allQuery = async (sql, params = []) => {
       const result = await pgPool.query(query, params);
       return result.rows;
     } catch (err) {
-      console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
-      usePostgres = false;
-      initSqlite();
-      return allQuery(sql, params);
+      if (!process.env.VERCEL) {
+        console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
+        usePostgres = false;
+        initSqlite();
+        return allQuery(sql, params);
+      }
+      throw err;
     }
   } else {
     initSqlite();
