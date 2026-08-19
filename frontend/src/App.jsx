@@ -7,7 +7,9 @@ import AdminDashboard from './components/AdminDashboard';
 import DeptDashboard from './components/DeptDashboard';
 import ComplaintDetails from './components/ComplaintDetails';
 
-const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : '/api';
+const API_BASE = (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:5000/api'
+  : '/api';
 
 export default function App() {
   const [lang, setLang] = useState('en');
@@ -244,17 +246,24 @@ export default function App() {
           photoUrl
         })
       });
-      const data = await res.json();
+      let data;
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        throw new Error(`Server returned non-JSON response (${res.status}). Please make sure you are using the correct Vercel URL with backend routing enabled.`);
+      }
+
       if (res.ok) {
         showNotification(`Grievance submitted successfully! Tracking ID: ${data.complaintId}`);
         setTrackQuery(data.complaintId);
         setPublicForm({ name: '', contact: '', village: '', description: '', photo: null });
         performTrackLookup(data.complaintId);
       } else {
-        showNotification(data.error, 'error');
+        showNotification(data.error || 'Failed to submit grievance', 'error');
       }
     } catch (err) {
-      showNotification('Failed to submit grievance', 'error');
+      showNotification(err.message || 'Failed to submit grievance', 'error');
     }
   };
 
