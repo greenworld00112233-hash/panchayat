@@ -30,7 +30,20 @@ if (isPostgresConfigured) {
 function initSqlite() {
   if (sqliteDb) return;
   console.log('Initializing local SQLite database fallback...');
-  const sqlite3 = require('sqlite3').verbose();
+  
+  let sqlite3;
+  try {
+    sqlite3 = require('sqlite3').verbose();
+  } catch (err) {
+    console.error('CRITICAL: sqlite3 native module failed to load. Local database fallback is unavailable on this platform. Error:', err.message);
+    sqliteDb = {
+      run: (sql, params, cb) => cb(new Error('SQLite database is unavailable on this platform (native binary missing). Please configure a PostgreSQL DATABASE_URL in Vercel.')),
+      get: (sql, params, cb) => cb(new Error('SQLite database is unavailable on this platform (native binary missing). Please configure a PostgreSQL DATABASE_URL in Vercel.')),
+      all: (sql, params, cb) => cb(new Error('SQLite database is unavailable on this platform (native binary missing). Please configure a PostgreSQL DATABASE_URL in Vercel.'))
+    };
+    return;
+  }
+
   const dbDir = path.resolve(__dirname, '../data');
   const fs = require('fs');
   
