@@ -1,73 +1,170 @@
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-// Load environment variables locally
-if (!process.env.VERCEL) {
-  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
+const isPostgresConfigured = process.env.DATABASE_URL && 
+  !process.env.DATABASE_URL.includes('xxxxxx') && 
+  process.env.DATABASE_URL.startsWith('postgres');
+
+let pgPool = null;
+let sqliteDb = null;
+let usePostgres = isPostgresConfigured;
+
+if (isPostgresConfigured) {
+  console.log('Using PostgreSQL database configuration.');
+  const { Pool } = require('pg');
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL.includes('sslmode=require')
+      ? { rejectUnauthorized: false }
+      : false
+  });
+  pgPool.on('connect', () => {
+    console.log('Connected to PostgreSQL database.');
+  });
+  pgPool.on('error', (err) => {
+    console.error('PostgreSQL connection pool error:', err.message);
+  });
 }
 
-const { Pool } = require('pg');
+function initSqlite() {
+  if (sqliteDb) return;
+  console.log('Initializing local SQLite database fallback...');
+  const sqlite3 = require('sqlite3').verbose();
+  const dbDir = path.resolve(__dirname, '../data');
+  const fs = require('fs');
+  
+  try {
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+  } catch (e) {
+    console.warn('Could not create data directory, using in-memory database instead.');
+  }
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('sslmode=require')
-    ? { rejectUnauthorized: false }
-    : false
-});
+  // On serverless Vercel, the filesystem is read-only, so write SQLite to /tmp or use memory
+  let dbPath;
+  if (process.env.VERCEL) {
+    dbPath = '/tmp/panchayat.sqlite';
+  } else {
+    dbPath = path.join(dbDir, 'panchayat.sqlite');
+  }
 
-pool.on('connect', () => {
-  console.log('Connected to PostgreSQL database.');
-});
+  sqliteDb = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Error opening SQLite database:', err.message);
+    } else {
+      console.log(`Connected to SQLite database at: ${dbPath}`);
+    }
+  });
+}
 
-pool.on('error', (err) => {
-  console.error('PostgreSQL connection pool error:', err.message);
-});
-
-const db = pool;
+if (!isPostgresConfigured) {
+  console.log('PostgreSQL DATABASE_URL not set or contains placeholders. Falling back to SQLite.');
+  initSqlite();
+}
 
 function preprocessSql(sql) {
   let processed = sql;
   
-  // Convert SQLite "INSERT OR IGNORE" to PostgreSQL "ON CONFLICT" syntax
-  if (processed.includes('INSERT OR IGNORE INTO departments')) {
-    processed = processed.replace('INSERT OR IGNORE INTO departments', 'INSERT INTO departments');
-    processed += ' ON CONFLICT (id) DO NOTHING';
-  } else if (processed.includes('INSERT OR IGNORE INTO users')) {
-    processed = processed.replace('INSERT OR IGNORE INTO users', 'INSERT INTO users');
-    processed += ' ON CONFLICT (id) DO NOTHING';
-  }
+  if (usePostgres) {
+    // Convert SQLite "INSERT OR IGNORE" to PostgreSQL "ON CONFLICT" syntax
+    if (processed.includes('INSERT OR IGNORE INTO departments')) {
+      processed = processed.replace('INSERT OR IGNORE INTO departments', 'INSERT INTO departments');
+      processed += ' ON CONFLICT (id) DO NOTHING';
+    } else if (processed.includes('INSERT OR IGNORE INTO users')) {
+      processed = processed.replace('INSERT OR IGNORE INTO users', 'INSERT INTO users');
+      processed += ' ON CONFLICT (id) DO NOTHING';
+    }
 
-  // Convert SQLite ? to PostgreSQL $1, $2, ...
-  let count = 1;
-  processed = processed.replace(/\?/g, () => `$${count++}`);
+    // Convert SQLite ? to PostgreSQL $1, $2, ...
+    let count = 1;
+    processed = processed.replace(/\?/g, () => `$${count++}`);
+  }
   return processed;
 }
 
 const runQuery = async (sql, params = []) => {
-  const query = preprocessSql(sql);
-  const result = await pool.query(query, params);
-  return result;
+  if (usePostgres) {
+    try {
+      const query = preprocessSql(sql);
+      return await pgPool.query(query, params);
+    } catch (err) {
+      console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
+      usePostgres = false;
+      initSqlite();
+      return runQuery(sql, params);
+    }
+  } else {
+    initSqlite();
+    const query = preprocessSql(sql);
+    return new Promise((resolve, reject) => {
+      sqliteDb.run(query, params, function(err) {
+        if (err) reject(err);
+        else resolve({ rows: [], lastID: this.lastID, changes: this.changes });
+      });
+    });
+  }
 };
 
 const getQuery = async (sql, params = []) => {
-  const query = preprocessSql(sql);
-  const result = await pool.query(query, params);
-  return result.rows[0];
+  if (usePostgres) {
+    try {
+      const query = preprocessSql(sql);
+      const result = await pgPool.query(query, params);
+      return result.rows[0];
+    } catch (err) {
+      console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
+      usePostgres = false;
+      initSqlite();
+      return getQuery(sql, params);
+    }
+  } else {
+    initSqlite();
+    const query = preprocessSql(sql);
+    return new Promise((resolve, reject) => {
+      sqliteDb.get(query, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
 };
 
 const allQuery = async (sql, params = []) => {
-  const query = preprocessSql(sql);
-  const result = await pool.query(query, params);
-  return result.rows;
+  if (usePostgres) {
+    try {
+      const query = preprocessSql(sql);
+      const result = await pgPool.query(query, params);
+      return result.rows;
+    } catch (err) {
+      console.error('PostgreSQL query failed. Automatically falling back to SQLite database. Error:', err.message);
+      usePostgres = false;
+      initSqlite();
+      return allQuery(sql, params);
+    }
+  } else {
+    initSqlite();
+    const query = preprocessSql(sql);
+    return new Promise((resolve, reject) => {
+      sqliteDb.all(query, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+  }
 };
 
 async function initDb() {
+  // Define helper for checks because SQLite/PostgreSQL CHECK syntax can vary slightly, 
+  // but standard SQL syntax defined here is supported by both.
+  
   // Create Users Table
   await runQuery(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      role TEXT CHECK(role IN ('citizen', 'admin', 'department')) NOT NULL,
+      role TEXT NOT NULL,
       village TEXT,
       contact TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL
@@ -89,11 +186,11 @@ async function initDb() {
       citizen_id TEXT NOT NULL,
       description TEXT NOT NULL,
       department_id TEXT,
-      status TEXT CHECK(status IN ('Submitted', 'In Process', 'Resolved')) DEFAULT 'Submitted',
+      status TEXT DEFAULT 'Submitted',
       photo_url TEXT,
       voice_url TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      feedback_rating INTEGER CHECK(feedback_rating BETWEEN 1 AND 5),
+      feedback_rating INTEGER,
       feedback_comment TEXT,
       FOREIGN KEY(citizen_id) REFERENCES users(id),
       FOREIGN KEY(department_id) REFERENCES departments(id)
@@ -107,7 +204,7 @@ async function initDb() {
       complaint_id TEXT NOT NULL,
       department_id TEXT NOT NULL,
       text TEXT NOT NULL,
-      visibility TEXT CHECK(visibility IN ('public', 'internal')) NOT NULL,
+      visibility TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(complaint_id) REFERENCES complaints(id),
       FOREIGN KEY(department_id) REFERENCES departments(id)
@@ -120,7 +217,7 @@ async function initDb() {
       id TEXT PRIMARY KEY,
       complaint_id TEXT NOT NULL,
       message TEXT NOT NULL,
-      type TEXT CHECK(type IN ('sms', 'whatsapp')) DEFAULT 'sms',
+      type TEXT DEFAULT 'sms',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(complaint_id) REFERENCES complaints(id)
     )
@@ -143,7 +240,7 @@ async function initDb() {
     try {
       await runQuery('INSERT OR IGNORE INTO departments (id, name) VALUES (?, ?)', [dept.toLowerCase(), dept]);
     } catch (e) {
-      console.error(e);
+      console.error('Department seeding skipped/already exists:', e.message);
     }
   }
 
@@ -152,10 +249,14 @@ async function initDb() {
   
   // Demo Admin
   const adminHash = await bcrypt.hash('admin123', salt);
-  await runQuery(`
-    INSERT OR IGNORE INTO users (id, name, role, village, contact, password_hash)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, ['a1', 'Sarpanch Amit Singh', 'admin', 'Rajpur', '9900990099', adminHash]);
+  try {
+    await runQuery(`
+      INSERT OR IGNORE INTO users (id, name, role, village, contact, password_hash)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, ['a1', 'Sarpanch Amit Singh', 'admin', 'Rajpur', '9900990099', adminHash]);
+  } catch (e) {
+    console.error('Admin seeding skipped/already exists:', e.message);
+  }
 
   // Demo Department Officials
   const deptHash = await bcrypt.hash('dept123', salt);
@@ -168,17 +269,21 @@ async function initDb() {
 
   for (const [deptId, userId] of Object.entries(deptUserIds)) {
     const deptName = deptId.charAt(0).toUpperCase() + deptId.slice(1);
-    await runQuery(`
-      INSERT OR IGNORE INTO users (id, name, role, village, contact, password_hash)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [userId, `${deptName} Officer`, 'department', 'Rajpur', `900000000${userId === 'e1' ? '1' : userId === 'w1' ? '2' : userId === 'r1' ? '3' : '4'}`, deptHash]);
+    try {
+      await runQuery(`
+        INSERT OR IGNORE INTO users (id, name, role, village, contact, password_hash)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [userId, `${deptName} Officer`, 'department', 'Rajpur', `900000000${userId === 'e1' ? '1' : userId === 'w1' ? '2' : userId === 'r1' ? '3' : '4'}`, deptHash]);
+    } catch (e) {
+      console.error(`Dept ${deptId} seeding skipped/already exists:`, e.message);
+    }
   }
 
   console.log('Database schema initialized and seeded.');
 }
 
 module.exports = {
-  db,
+  db: isPostgresConfigured ? pgPool : sqliteDb,
   runQuery,
   getQuery,
   allQuery,
