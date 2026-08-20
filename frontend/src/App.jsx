@@ -6,6 +6,7 @@ import PublicPortal from './components/PublicPortal';
 import AdminDashboard from './components/AdminDashboard';
 import DeptDashboard from './components/DeptDashboard';
 import ComplaintDetails from './components/ComplaintDetails';
+import logoImg from './assets/logo.jpg';
 
 const API_BASE = (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000/api'
@@ -429,7 +430,7 @@ export default function App() {
     <div class="receipt-card">
         <div class="header">
             <h1>Official Receipt</h1>
-            <p>Gram Panchayat Grievance Redressal System</p>
+            <p>GramSetu Grievance Redressal System</p>
         </div>
         <div class="divider"></div>
         <table class="details-table">
@@ -514,7 +515,7 @@ export default function App() {
 
   const syncOfflineQueue = async () => {
     if (offlineQueue.length === 0) return;
-    showNotification('Syncing offline complaints with Gram Panchayat server...');
+    showNotification('Syncing offline complaints with GramSetu server...');
     for (const item of offlineQueue) {
       try {
         let photoUrl = null;
@@ -665,7 +666,10 @@ export default function App() {
 
       {/* Navbar */}
       <nav className="navbar">
-        <div className="logo">{t.title}</div>
+        <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src={logoImg} alt="GramSetu Logo" style={{ height: '40px', width: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-primary)' }} />
+          <span>{t.title}</span>
+        </div>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <button className="btn btn-secondary" onClick={() => setLang(lang === 'en' ? 'hi' : 'en')} style={{ padding: '8px 12px' }}>
             <Languages size={18} />

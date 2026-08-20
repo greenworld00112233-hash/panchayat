@@ -369,7 +369,7 @@ app.put('/api/complaints/:id', authenticateToken, async (req, res) => {
         complaintId,
         citizen.contact,
         `Update on Grievance ${complaintId}: Status is now "${status || old.status}".`,
-        'whatsapp'
+        'sms'
       );
     }
 

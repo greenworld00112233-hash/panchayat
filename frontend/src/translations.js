@@ -1,7 +1,7 @@
 export const translations = {
   en: {
-    title: "Gram Panchayat Grievance System",
-    subtitle: "Empowering villagers, resolving complaints transparently.",
+    title: "GramSetu",
+    subtitle: "Your Complaint, Our Resolve. (Empowering villagers, resolving complaints transparently)",
     citizenDash: "Citizen Dashboard",
     adminDash: "Sarpanch Admin Dashboard",
     deptDash: "Department Dashboard",
@@ -46,8 +46,8 @@ export const translations = {
     downloadReceipt: "Download Receipt"
   },
   hi: {
-    title: "ग्राम पंचायत शिकायत निवारण प्रणाली",
-    subtitle: "ग्रामीणों का सशक्तिकरण, शिकायतों का पारदर्शी समाधान।",
+    title: "ग्रामसेतु",
+    subtitle: "आपकी शिकायत, हमारा संकल्प (ग्रामीणों का सशक्तिकरण, शिकायतों का पारदर्शी समाधान)",
     citizenDash: "नागरिक डैशबोर्ड",
     adminDash: "सरपंच / व्यवस्थापक डैशबोर्ड",
     deptDash: "विभाग डैशबोर्ड",
